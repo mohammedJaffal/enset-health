@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+{% load text_filters %}
+
+{% block title %}AI Doctor - Health Monitoring{% endblock %}
+
+{% block body_class %}page-ai-doctor{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">AI Doctor</h1>
+        <div class="text-muted">AI-assisted analysis and personalized recommendations</div>
+    </div>
+    <div>
+        <a href="{% url 'health:dashboard' %}" class="btn btn-sm btn-outline-light"><i class="fa-solid fa-chart-line me-1"></i> Dashboard</a>
+    </div>
+</div>
+
+{% if not has_data %}
+<div class="alert-custom alert-info">{{ message }}</div>
+{% else %}
+
+<div class="chat-wrap">
+    <div class="chat-sidebar">
+        <div class="card chat-box">
+            <h3>Summary</h3>
+            <div class="mt-2">
+                <div class="d-flex justify-content-between"><small class="text-muted">Average Heart Rate</small><strong>{{ stats.avg_heart_rate|floatformat:1 }} bpm</strong></div>
+                <div class="d-flex justify-content-between mt-1"><small class="text-muted">Average Sleep</small><strong>{{ stats.avg_sleep|floatformat:1 }} hrs</strong></div>
+                <div class="d-flex justify-content-between mt-1"><small class="text-muted">Total Days</small><strong>{{ stats.total_days }}</strong></div>
+            </div>
+            {% if alerts.has_alert %}
+            <div class="mt-3 alert-custom alert-warning">
+                {% for message in alerts.messages %}
+                <div>{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div>
+        <div class="card chat-box">
+            <h3>AI Health Analysis</h3>
+
+            <form method="post" class="mb-3 ai-form" id="aiInsightsForm" data-endpoint="{% url 'health:ai_doctor_insights_api' %}">
+                {% csrf_token %}
+                <div>
+                    <label class="form-label text-muted">Custom Prompt (optional)</label>
+                    <textarea id="custom_prompt" name="custom_prompt" rows="6" class="form-control ai-textarea" placeholder="Ask the AI doctor about trends, risks, or lifestyle recommendations."></textarea>
+                </div>
+                <div class="mt-2">
+                    <button type="submit" name="get_insights" class="btn btn-primary ai-submit-btn" id="aiSubmitBtn" {% if not ai_available %}disabled aria-disabled="true"{% endif %}>
+                        <span class="btn-label">Get AI Insights</span>
+                        <span class="btn-loading">Analyzing your data...</span>
+                    </button>
+                    {% if not ai_available %}
+                    <div class="text-muted small mt-2">AI not configured.</div>
+                    {% endif %}
+                </div>
+                <div class="alert-custom alert-warning mt-3 d-none" id="aiInlineError"></div>
+            </form>
+
+            {% if ai_error %}
+            <div class="alert-custom alert-warning"><strong>Error:</strong> {{ ai_error }}</div>
+            {% endif %}
+
+            <div class="mt-3{% if not ai_response %} d-none{% endif %}" id="aiRecommendations">
+                <h5>Recommendations</h5>
+                <div class="ai-accordion" id="aiAccordion">
+                    <div class="accordion-item">
+                        <button type="button" class="accordion-toggle is-open" data-target="aiSectionOverall" aria-expanded="true">Overall Assessment</button>
+                        <div class="accordion-panel is-open" id="aiSectionOverall"></div>
+                    </div>
+                    <div class="accordion-item">
+                        <button type="button" class="accordion-toggle" data-target="aiSectionTrends" aria-expanded="false">Key Trends and Patterns</button>
+                        <div class="accordion-panel" id="aiSectionTrends"></div>
+                    </div>
+                    <div class="accordion-item">
+                        <button type="button" class="accordion-toggle" data-target="aiSectionRecs" aria-expanded="false">Recommendations for Improvement</button>
+                        <div class="accordion-panel" id="aiSectionRecs"></div>
+                    </div>
+                    <div class="accordion-item">
+                        <button type="button" class="accordion-toggle" data-target="aiSectionConcerns" aria-expanded="false">Concerns to Address</button>
+                        <div class="accordion-panel" id="aiSectionConcerns"></div>
+                    </div>
+                    <div class="accordion-item">
+                        <button type="button" class="accordion-toggle" data-target="aiSectionNext" aria-expanded="false">Next Steps</button>
+                        <div class="accordion-panel" id="aiSectionNext"></div>
+                    </div>
+                </div>
+                <div class="ai-disclaimer">This AI analysis is for informational purposes only and does not replace professional medical advice.</div>
+                <div class="ai-response-raw d-none" id="aiResponseRaw">{% if ai_response %}{{ ai_response|clean_ai_response|linebreaksbr }}{% endif %}</div>
+            </div>
+            {% if not ai_response and insight_requested %}
+            <div class="alert-custom alert-info">No insights generated. Please try again.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const aiForm = document.getElementById('aiInsightsForm');
+    const aiSubmitBtn = document.getElementById('aiSubmitBtn');
+    const aiInlineError = document.getElementById('aiInlineError');
+    const aiRecommendations = document.getElementById('aiRecommendations');
+    const rawContainer = document.getElementById('aiResponseRaw');
+    const panels = {
+        overall: document.getElementById('aiSectionOverall'),
+        trends: document.getElementById('aiSectionTrends'),
+        recs: document.getElementById('aiSectionRecs'),
+        concerns: document.getElementById('aiSectionConcerns'),
+        next: document.getElementById('aiSectionNext'),
+    };
+
+    const setPanel = (panel, text) => {
+        if (!panel) return;
+        panel.innerHTML = text ? text.replace(/\n/g, '<br>') : '<span class="text-muted">No additional details provided.</span>';
+    };
+
+    const normalizeHeading = (text) => {
+        return text
+            .replace(/^[#\s]+/g, '')
+            .replace(/[*_`]/g, '')
+            .replace(/[—–-]+$/g, '')
+            .replace(/[:.]+$/g, '')
+            .replace(/&/g, 'and')
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
+
+    const cleanLine = (text) => {
+        return text
+            .replace(/^[#\s]+/g, '')
+            .replace(/[*_`]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
+
+    const isSeparatorLine = (line) => {
+        const trimmed = line.trim();
+        return /^[-_]{3,}$/.test(trimmed);
+    };
+
+    const headingMatchers = {
+        overall: /^(overall(\s*health)?\s*(assessment|analysis)?|summary)$/,
+        trends: /^(key\s*trends(\s*and\s*patterns)?|trends(\s*and\s*patterns)?)$/,
+        recs: /^(specific\s*recommendations|recommendations(\s*for\s*improvement)?)$/,
+        concerns: /^(concerns?(\s*to\s*address)?|risks?|red\s*flags?)$/,
+        next: /^(next\s*steps?|action\s*items?)$/,
+    };
+
+    const parseAndRenderResponse = (rawText) => {
+        if (!rawText || !panels.overall) return;
+        const sections = {
+            overall: '',
+            trends: '',
+            recs: '',
+            concerns: '',
+            next: '',
+        };
+
+        const lines = rawText.split(/\n+/);
+        let active = 'overall';
+        let hasHeading = false;
+
+        lines.forEach((line) => {
+            const trimmed = line.trim();
+            if (!trimmed || isSeparatorLine(trimmed)) {
+                return;
+            }
+            const normalized = normalizeHeading(trimmed);
+            if (normalized) {
+                const matched = Object.entries(headingMatchers).find(([, pattern]) => pattern.test(normalized));
+                if (matched) {
+                    active = matched[0];
+                    hasHeading = true;
+                    return;
+                }
+            }
+            const cleaned = cleanLine(trimmed);
+            if (!cleaned) return;
+            sections[active] += (sections[active] ? '\n' : '') + cleaned;
+        });
+
+        if (!hasHeading && !Object.values(sections).some((value) => value)) {
+            sections.overall = rawText;
+        }
+
+        setPanel(panels.overall, sections.overall || rawText);
+        setPanel(panels.trends, sections.trends);
+        setPanel(panels.recs, sections.recs);
+        setPanel(panels.concerns, sections.concerns);
+        setPanel(panels.next, sections.next);
+    };
+
+    if (aiForm && aiSubmitBtn) {
+        aiForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            aiSubmitBtn.disabled = true;
+            aiSubmitBtn.classList.add('is-loading');
+
+            if (aiInlineError) {
+                aiInlineError.classList.add('d-none');
+                aiInlineError.textContent = '';
+            }
+
+            const endpoint = aiForm.dataset.endpoint;
+            const formData = new FormData(aiForm);
+            const csrfToken = aiForm.querySelector('input[name=csrfmiddlewaretoken]')?.value;
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken || '',
+                    },
+                    body: formData,
+                });
+                const contentType = response.headers.get('content-type') || '';
+                const data = contentType.includes('application/json') ? await response.json() : null;
+
+                if (!response.ok || !data || !data.success) {
+                    const errorMessage = (data && data.error) || 'We could not generate insights right now. Please try again.';
+                    if (aiInlineError) {
+                        aiInlineError.textContent = errorMessage;
+                        aiInlineError.classList.remove('d-none');
+                    }
+                    return;
+                }
+
+                if (rawContainer) {
+                    rawContainer.textContent = data.response || '';
+                }
+                if (aiRecommendations) {
+                    aiRecommendations.classList.remove('d-none');
+                }
+                parseAndRenderResponse(data.response || '');
+            } catch (error) {
+                if (aiInlineError) {
+                    aiInlineError.textContent = 'We could not generate insights right now. Please try again.';
+                    aiInlineError.classList.remove('d-none');
+                }
+            } finally {
+                aiSubmitBtn.disabled = false;
+                aiSubmitBtn.classList.remove('is-loading');
+            }
+        });
+    }
+
+    if (rawContainer && panels.overall) {
+        const rawText = rawContainer.innerText.trim();
+        parseAndRenderResponse(rawText);
+    }
+
+    document.querySelectorAll('.accordion-toggle').forEach((toggle) => {
+        toggle.addEventListener('click', () => {
+            const targetId = toggle.dataset.target;
+            const panel = document.getElementById(targetId);
+            if (!panel) return;
+            const isOpen = panel.classList.contains('is-open');
+            panel.classList.toggle('is-open', !isOpen);
+            toggle.classList.toggle('is-open', !isOpen);
+            toggle.setAttribute('aria-expanded', String(!isOpen));
+        });
+    });
+</script>
+{% endblock %}

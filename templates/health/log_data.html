@@ -1,0 +1,262 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Log Data - Health Monitoring{% endblock %}
+
+{% block body_class %}page-log-data{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Log Health Data</h1>
+        <div class="text-muted">Add or manage daily health records</div>
+    </div>
+    <div>
+        <a href="{% url 'health:dashboard' %}" class="btn btn-sm btn-outline-light"><i class="fa-solid fa-chart-line me-1"></i> Back to Dashboard</a>
+    </div>
+</div>
+
+<!-- Add New Record Form -->
+<div class="card">
+    <h2 class="mb-3">Add New Health Record</h2>
+    {% if form.errors %}
+    <div class="alert-custom alert-warning">Please fix the highlighted fields and try again.</div>
+    {% endif %}
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-grid">
+            <div>
+                <label class="form-label text-muted">Date</label>
+                <input type="date" id="date" name="date" class="form-control" max="{{ today|date:'Y-m-d' }}" value="{% if form.is_bound %}{{ form.data.date }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" required>
+                {% if form.errors.date %}<small class="text-danger">{{ form.errors.date }}</small>{% endif %}
+                <small class="form-error js-error" id="dateError"></small>
+            </div>
+            <div>
+                <label class="form-label text-muted">Heart Rate (bpm)</label>
+                <input type="number" id="heart_rate" name="heart_rate" min="30" max="220" step="1" class="form-control" value="{% if form.is_bound %}{{ form.data.heart_rate }}{% else %}75{% endif %}" required>
+                {% if form.errors.heart_rate %}<small class="text-danger">{{ form.errors.heart_rate }}</small>{% endif %}
+                <small class="form-error js-error" id="heartRateError"></small>
+            </div>
+            <div>
+                <label class="form-label text-muted">Sleep Hours</label>
+                <input type="number" id="sleep_hours" name="sleep_hours" min="0" max="24" step="0.1" class="form-control" value="{% if form.is_bound %}{{ form.data.sleep_hours }}{% else %}7.0{% endif %}" required>
+                {% if form.errors.sleep_hours %}<small class="text-danger">{{ form.errors.sleep_hours }}</small>{% endif %}
+                <small class="form-error js-error" id="sleepError"></small>
+            </div>
+            <div>
+                <label class="form-label text-muted">Steps</label>
+                <input type="number" id="steps" name="steps" min="0" step="1" class="form-control" value="{% if form.is_bound %}{{ form.data.steps }}{% else %}5000{% endif %}" required>
+                {% if form.errors.steps %}<small class="text-danger">{{ form.errors.steps }}</small>{% endif %}
+                <small class="form-error js-error" id="stepsError"></small>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary form-submit">Save Record</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- All Records Table -->
+<div class="card">
+    <h2 class="mb-3">All Health Records</h2>
+    {% if records %}
+    <div class="table-responsive">
+    <table class="table table-borderless table-hover table-dark-custom table-sticky">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Heart Rate</th>
+                <th>Sleep Hours</th>
+                <th>Steps</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records %}
+            <tr data-date="{{ record.date|date:'Y-m-d' }}">
+                <td>{{ record.date }}</td>
+                <td>{{ record.heart_rate|floatformat:0 }} bpm</td>
+                <td>{{ record.sleep_hours|floatformat:1 }} hrs</td>
+                <td>{{ record.steps|intcomma }}</td>
+                <td>
+                    <div class="action-buttons">
+                        <a href="{% url 'health:edit_record' record.id %}" class="action-btn action-btn-edit"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
+                        <button type="button" class="action-btn action-btn-danger" data-delete-url="{% url 'health:delete_record' record.id %}" data-record-date="{{ record.date }}"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No records found. Add your first record above.</p>
+    {% endif %}
+
+    <div class="modal-backdrop" id="deleteModal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+            <h3 id="deleteModalTitle">Delete record?</h3>
+            <p class="text-muted mb-3">Are you sure you want to delete the record from <span id="deleteRecordDate">this date</span>?</p>
+            <form method="post" id="confirmDeleteForm" action="#">
+                {% csrf_token %}
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-sm btn-outline-light" id="cancelDelete">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger" id="confirmDelete">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const todayValue = '{{ today|date:"Y-m-d" }}';
+    const dateInput = document.getElementById('date');
+    const heartRateInput = document.getElementById('heart_rate');
+    const sleepInput = document.getElementById('sleep_hours');
+    const stepsInput = document.getElementById('steps');
+
+    const setError = (element, message) => {
+        if (!element) return;
+        element.textContent = message || '';
+    };
+
+    const validateDate = () => {
+        if (!dateInput) return true;
+        const value = dateInput.value;
+        if (!value) {
+            setError(document.getElementById('dateError'), 'Date is required.');
+            return false;
+        }
+        if (todayValue && value > todayValue) {
+            setError(document.getElementById('dateError'), 'Date cannot be in the future.');
+            return false;
+        }
+        setError(document.getElementById('dateError'), '');
+        return true;
+    };
+
+    const validateHeartRate = () => {
+        if (!heartRateInput) return true;
+        const value = Number(heartRateInput.value);
+        if (!Number.isFinite(value)) {
+            setError(document.getElementById('heartRateError'), 'Enter a valid heart rate.');
+            return false;
+        }
+        if (value < 30 || value > 220) {
+            setError(document.getElementById('heartRateError'), 'Heart rate must be 30-220 bpm.');
+            return false;
+        }
+        setError(document.getElementById('heartRateError'), '');
+        return true;
+    };
+
+    const validateSleep = () => {
+        if (!sleepInput) return true;
+        const value = Number(sleepInput.value);
+        if (!Number.isFinite(value)) {
+            setError(document.getElementById('sleepError'), 'Enter a valid sleep duration.');
+            return false;
+        }
+        if (value < 0 || value > 24) {
+            setError(document.getElementById('sleepError'), 'Sleep hours must be 0-24.');
+            return false;
+        }
+        setError(document.getElementById('sleepError'), '');
+        return true;
+    };
+
+    const validateSteps = () => {
+        if (!stepsInput) return true;
+        const value = Number(stepsInput.value);
+        if (!Number.isFinite(value) || !Number.isInteger(value)) {
+            setError(document.getElementById('stepsError'), 'Steps must be a whole number.');
+            return false;
+        }
+        if (value < 0) {
+            setError(document.getElementById('stepsError'), 'Steps must be 0 or more.');
+            return false;
+        }
+        setError(document.getElementById('stepsError'), '');
+        return true;
+    };
+
+    [dateInput, heartRateInput, sleepInput, stepsInput].forEach((input) => {
+        if (!input) return;
+        input.addEventListener('input', () => {
+            validateDate();
+            validateHeartRate();
+            validateSleep();
+            validateSteps();
+        });
+    });
+
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', (event) => {
+            const ok = validateDate() && validateHeartRate() && validateSleep() && validateSteps();
+            if (!ok) {
+                event.preventDefault();
+            }
+        });
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const savedDate = params.get('saved');
+    if (savedDate) {
+        const savedRow = document.querySelector(`tr[data-date="${savedDate}"]`);
+        if (savedRow) {
+            savedRow.classList.add('row-highlight');
+            setTimeout(() => savedRow.classList.remove('row-highlight'), 2400);
+        }
+    }
+
+    const deleteModal = document.getElementById('deleteModal');
+    const cancelDelete = document.getElementById('cancelDelete');
+    const confirmDeleteForm = document.getElementById('confirmDeleteForm');
+    const deleteRecordDate = document.getElementById('deleteRecordDate');
+
+    const openDeleteModal = (url, recordDate) => {
+        if (!deleteModal) return;
+        if (confirmDeleteForm) {
+            confirmDeleteForm.setAttribute('action', url);
+        }
+        deleteRecordDate.textContent = recordDate || 'this date';
+        deleteModal.classList.add('is-visible');
+        deleteModal.setAttribute('aria-hidden', 'false');
+    };
+
+    const closeDeleteModal = () => {
+        if (!deleteModal) return;
+        deleteModal.classList.remove('is-visible');
+        deleteModal.setAttribute('aria-hidden', 'true');
+        if (confirmDeleteForm) {
+            confirmDeleteForm.setAttribute('action', '#');
+        }
+    };
+
+    document.querySelectorAll('.action-btn-danger').forEach((button) => {
+        button.addEventListener('click', () => {
+            openDeleteModal(button.dataset.deleteUrl, button.dataset.recordDate);
+        });
+    });
+
+    if (cancelDelete) {
+        cancelDelete.addEventListener('click', closeDeleteModal);
+    }
+
+    if (deleteModal) {
+        deleteModal.addEventListener('click', (event) => {
+            if (event.target === deleteModal) {
+                closeDeleteModal();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && deleteModal?.classList.contains('is-visible')) {
+            closeDeleteModal();
+        }
+    });
+</script>
+{% endblock %}

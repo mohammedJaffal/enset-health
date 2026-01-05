@@ -1,0 +1,363 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Dashboard - Health Monitoring{% endblock %}
+
+{% block body_class %}page-dashboard{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Health Dashboard</h1>
+        <div class="text-muted">Overview of recent health metrics and trends</div>
+    </div>
+    <div>
+        <a href="{% url 'health:log_data' %}" class="btn btn-sm btn-outline-light me-2"><i class="fa-solid fa-plus me-1"></i> Add Record</a>
+    </div>
+</div>
+
+{% if not has_data %}
+<div class="alert-custom alert-info">{{ message }}</div>
+{% else %}
+
+<!-- KPI Row -->
+<div class="kpi-grid mb-3">
+    <div class="kpi-card">
+        <div class="kpi-icon"><i class="fa-solid fa-heart text-white"></i></div>
+        <div class="kpi-body">
+            <div class="kpi-title">Average Heart Rate</div>
+            <div class="kpi-value">{{ stats.avg_heart_rate|floatformat:0 }} bpm</div>
+            <div class="kpi-delta">Latest reading: {{ latest_record.heart_rate|floatformat:0 }} bpm</div>
+        </div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon"><i class="fa-solid fa-bed text-white"></i></div>
+        <div class="kpi-body">
+            <div class="kpi-title">Average Sleep</div>
+            <div class="kpi-value">{{ stats.avg_sleep|floatformat:1 }} hrs</div>
+            <div class="kpi-delta">Tracked days: {{ stats.total_days }}</div>
+        </div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon"><i class="fa-solid fa-walking text-white"></i></div>
+        <div class="kpi-body">
+            <div class="kpi-title">Average Daily Steps</div>
+            <div class="kpi-value">{{ stats.avg_steps|floatformat:0|intcomma }}</div>
+            <div class="kpi-delta">Keep moving and build momentum</div>
+        </div>
+    </div>
+</div>
+
+<!-- Alerts -->
+{% if alerts.has_alert %}
+<div class="alert-custom alert-warning">
+    <strong>Recent Alerts</strong>
+    <div class="mt-2">
+        {% for message in alerts.messages %}
+        <div class="message-bubble ai">{{ message }}</div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="alert-custom alert-success">
+    <strong>All Clear!</strong> Your latest health metrics are within normal ranges.
+    <div class="insight-subline" id="insightSubline">Compared to last week: --</div>
+</div>
+{% endif %}
+
+<!-- Charts Row -->
+<div class="row">
+    <div class="col-lg-7">
+        <div class="chart-card card">
+            <h2>Heart Rate Trend</h2>
+            <div id="heartRateChart" style="height:420px"></div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="chart-card card">
+            <h2>Sleep Duration</h2>
+            <div id="sleepChart" style="height:420px"></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Recent Records</h2>
+        <a href="{% url 'health:log_data' %}" class="btn btn-sm btn-outline-light">View All</a>
+    </div>
+    {% if recent_records %}
+    <div class="table-filters d-flex justify-content-between align-items-center mb-3">
+        <div class="filter-group">
+            <span class="filter-label">Quick range</span>
+            <div class="filter-buttons">
+                <button type="button" class="filter-btn active" data-range="7">Last 7 days</button>
+                <button type="button" class="filter-btn" data-range="30">Last 30 days</button>
+                <button type="button" class="filter-btn" data-range="all">All</button>
+            </div>
+        </div>
+        <div class="filter-search">
+            <input id="recordSearch" class="form-control form-control-sm" type="search" placeholder="Search date or values">
+        </div>
+    </div>
+    <div class="table-responsive">
+    <table class="table table-borderless table-hover table-dark-custom">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Heart Rate</th>
+                <th>Sleep Hours</th>
+                <th>Steps</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in recent_records %}
+            <tr class="record-row" data-date="{{ record.date|date:'Y-m-d' }}" data-steps="{{ record.steps }}" data-sleep="{{ record.sleep_hours }}" data-search="{{ record.date }} {{ record.heart_rate }} {{ record.sleep_hours }} {{ record.steps }}">
+                <td>{{ record.date }}</td>
+                <td>{{ record.heart_rate|floatformat:0 }} bpm</td>
+                <td>{{ record.sleep_hours|floatformat:1 }} hrs</td>
+                <td>{{ record.steps|intcomma }}</td>
+                <td>
+                    <div class="action-buttons">
+                        <a href="{% url 'health:edit_record' record.id %}" class="action-btn action-btn-edit"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
+                        <button type="button" class="action-btn action-btn-danger" data-delete-url="{% url 'health:delete_record' record.id %}" data-record-date="{{ record.date }}"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="text-muted">No records yet. Add your first record to get started.</p>
+    {% endif %}
+
+    <div class="modal-backdrop" id="deleteModal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+            <h3 id="deleteModalTitle">Delete record?</h3>
+            <p class="text-muted mb-3">Are you sure you want to delete the record from <span id="deleteRecordDate">this date</span>?</p>
+            <form method="post" id="confirmDeleteForm" action="#">
+                {% csrf_token %}
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-sm btn-outline-light" id="cancelDelete">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger" id="confirmDelete">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if has_data %}
+<script>
+    // Heart Rate Chart
+    var heartRateData = [{
+        x: {{ chart_data.dates|safe }},
+        y: {{ chart_data.heart_rates|safe }},
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Heart Rate',
+        line: {color: '#1cc7b7'}
+    }];
+
+    var heartRateLayout = {
+        title: 'Heart Rate Trend',
+        xaxis: {title: 'Date'},
+        yaxis: {title: 'Heart Rate (bpm)'},
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#1b3352'}
+    };
+
+    Plotly.newPlot('heartRateChart', heartRateData, heartRateLayout);
+
+    // Sleep Chart
+    var sleepData = [{
+        x: {{ chart_data.dates|safe }},
+        y: {{ chart_data.sleep_hours|safe }},
+        type: 'bar',
+        name: 'Sleep Hours',
+        marker: {color: '#f5c451'}
+    }];
+
+    var sleepLayout = {
+        title: 'Sleep Duration Trend',
+        xaxis: {title: 'Date'},
+        yaxis: {title: 'Sleep Hours'},
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {color: '#1b3352'}
+    };
+
+    Plotly.newPlot('sleepChart', sleepData, sleepLayout);
+
+    const rows = Array.from(document.querySelectorAll('.record-row'));
+    const quickButtons = Array.from(document.querySelectorAll('.filter-btn'));
+    const searchInput = document.getElementById('recordSearch');
+    const insightSubline = document.getElementById('insightSubline');
+    const deleteModal = document.getElementById('deleteModal');
+    const cancelDelete = document.getElementById('cancelDelete');
+    const confirmDeleteForm = document.getElementById('confirmDeleteForm');
+    const deleteRecordDate = document.getElementById('deleteRecordDate');
+    let activeRange = 7;
+
+    const parseDate = (value) => {
+        if (!value) return null;
+        const parts = value.split('-');
+        if (parts.length === 3) {
+            return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        }
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const getLatestDate = () => {
+        let latest = null;
+        rows.forEach((row) => {
+            const rowDate = parseDate(row.dataset.date);
+            if (rowDate && (!latest || rowDate > latest)) {
+                latest = rowDate;
+            }
+        });
+        return latest;
+    };
+
+    const formatSteps = (value) => new Intl.NumberFormat('en-US', {maximumFractionDigits: 0}).format(value);
+    const formatSleep = (value) => Number(value).toFixed(1);
+
+    const applyFilters = () => {
+        const query = (searchInput?.value || '').trim().toLowerCase();
+        const latestDate = getLatestDate();
+        let startDate = null;
+
+        if (latestDate && activeRange !== 'all') {
+            startDate = new Date(latestDate);
+            startDate.setDate(startDate.getDate() - (activeRange - 1));
+        }
+
+        rows.forEach((row) => {
+            const rowDate = parseDate(row.dataset.date);
+            const searchText = (row.dataset.search || '').toLowerCase();
+            const matchesSearch = !query || searchText.includes(query);
+            const matchesRange = !startDate || (rowDate && rowDate >= startDate && rowDate <= latestDate);
+            row.style.display = matchesSearch && matchesRange ? '' : 'none';
+        });
+    };
+
+    quickButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const range = button.dataset.range;
+            activeRange = range === 'all' ? 'all' : Number(range);
+            quickButtons.forEach((btn) => btn.classList.remove('active'));
+            button.classList.add('active');
+            applyFilters();
+        });
+    });
+
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFilters);
+    }
+
+    const computeInsight = () => {
+        if (!insightSubline || rows.length === 0) return;
+        const latestDate = getLatestDate();
+        if (!latestDate) return;
+
+        const inWindow = (rowDate, start, end) => rowDate && rowDate >= start && rowDate <= end;
+        const endCurrent = new Date(latestDate);
+        const startCurrent = new Date(latestDate);
+        startCurrent.setDate(startCurrent.getDate() - 6);
+        const endPrevious = new Date(startCurrent);
+        endPrevious.setDate(endPrevious.getDate() - 1);
+        const startPrevious = new Date(endPrevious);
+        startPrevious.setDate(startPrevious.getDate() - 6);
+
+        const totals = (start, end) => {
+            let steps = 0;
+            let sleep = 0;
+            let count = 0;
+            const days = new Set();
+            rows.forEach((row) => {
+                const rowDate = parseDate(row.dataset.date);
+                if (inWindow(rowDate, start, end)) {
+                    steps += Number(row.dataset.steps || 0);
+                    sleep += Number(row.dataset.sleep || 0);
+                    count += 1;
+                    if (row.dataset.date) {
+                        days.add(row.dataset.date);
+                    }
+                }
+            });
+            return {steps, sleep, count, dayCount: days.size};
+        };
+
+        const current = totals(startCurrent, endCurrent);
+        const previous = totals(startPrevious, endPrevious);
+        if (current.dayCount < 3 || previous.dayCount < 3) {
+            insightSubline.textContent = 'Compared to last week: not enough data yet.';
+            return;
+        }
+
+        const currentStepsAvg = current.steps / current.count;
+        const previousStepsAvg = previous.steps / previous.count;
+        const currentSleepAvg = current.sleep / current.count;
+        const previousSleepAvg = previous.sleep / previous.count;
+        const deltaSteps = Math.round(currentStepsAvg - previousStepsAvg);
+        const deltaSleep = currentSleepAvg - previousSleepAvg;
+        const stepSign = deltaSteps >= 0 ? '+' : '-';
+        const sleepSign = deltaSleep >= 0 ? '+' : '-';
+
+        insightSubline.textContent = `Compared to last week: ${stepSign}${formatSteps(Math.abs(deltaSteps))} steps/day, sleep ${sleepSign}${formatSleep(Math.abs(deltaSleep))} hrs`;
+    };
+
+    const openDeleteModal = (url, recordDate) => {
+        if (!deleteModal) return;
+        if (confirmDeleteForm) {
+            confirmDeleteForm.setAttribute('action', url);
+        }
+        deleteRecordDate.textContent = recordDate || 'this date';
+        deleteModal.classList.add('is-visible');
+        deleteModal.setAttribute('aria-hidden', 'false');
+    };
+
+    const closeDeleteModal = () => {
+        if (!deleteModal) return;
+        deleteModal.classList.remove('is-visible');
+        deleteModal.setAttribute('aria-hidden', 'true');
+        if (confirmDeleteForm) {
+            confirmDeleteForm.setAttribute('action', '#');
+        }
+    };
+
+    document.querySelectorAll('.action-btn-danger').forEach((button) => {
+        button.addEventListener('click', () => {
+            openDeleteModal(button.dataset.deleteUrl, button.dataset.recordDate);
+        });
+    });
+
+    if (cancelDelete) {
+        cancelDelete.addEventListener('click', closeDeleteModal);
+    }
+
+    if (deleteModal) {
+        deleteModal.addEventListener('click', (event) => {
+            if (event.target === deleteModal) {
+                closeDeleteModal();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && deleteModal?.classList.contains('is-visible')) {
+            closeDeleteModal();
+        }
+    });
+
+    computeInsight();
+    applyFilters();
+</script>
+{% endif %}
+{% endblock %}

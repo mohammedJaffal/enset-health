@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Sign In - Health Monitoring{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-shell">
+    <div class="auth-card card">
+        <div class="auth-logo" aria-hidden="true">
+            <i class="fa-solid fa-heart-pulse"></i>
+        </div>
+        <div class="mb-4 text-center auth-header">
+            <h1 class="h3 mb-2">Welcome back</h1>
+            <div class="text-muted">Sign in to your health dashboard</div>
+        </div>
+        <form method="post" class="auth-form">
+            {% csrf_token %}
+            {% if form.errors %}
+            <div class="alert-custom alert-warning">Please check your username and password.</div>
+            {% endif %}
+            <div class="mb-3">
+                <label for="id_username" class="form-label">Email address</label>
+                <input type="email" name="username" id="id_username" class="form-control{% if form.username.errors %} is-invalid{% endif %}" autocomplete="username" required{% if form.username.errors %} aria-describedby="username-error"{% endif %}>
+                {% if form.username.errors %}
+                <div id="username-error" class="form-error">
+                    {% for error in form.username.errors %}{{ error }}{% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <label for="id_password" class="form-label mb-0">Password</label>
+                    <a href="{% url 'health:password_reset' %}" class="auth-link auth-link-subtle">Forgot password?</a>
+                </div>
+                <div class="password-field">
+                    <input type="password" name="password" id="id_password" class="form-control{% if form.password.errors %} is-invalid{% endif %}" autocomplete="current-password" required{% if form.password.errors %} aria-describedby="password-error"{% endif %}>
+                    <button type="button" class="password-toggle" aria-label="Show password" data-password-toggle>
+                        <i class="fa-regular fa-eye"></i>
+                    </button>
+                </div>
+                {% if form.password.errors %}
+                <div id="password-error" class="form-error">
+                    {% for error in form.password.errors %}{{ error }}{% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary w-100 auth-submit" aria-live="polite">
+                <span class="auth-submit-text">Sign in</span>
+            </button>
+        </form>
+        <div class="auth-footer text-center mt-3">
+            <span class="text-muted">Don't have an account?</span>
+            <a href="{% url 'health:register' %}" class="auth-link ms-1">Create account</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+    const toggle = document.querySelector("[data-password-toggle]");
+    const input = document.getElementById("id_password");
+    const form = document.querySelector(".auth-form");
+    const submit = document.querySelector(".auth-submit");
+    const submitText = document.querySelector(".auth-submit-text");
+    if (!toggle || !input) return;
+
+    toggle.addEventListener("click", () => {
+        const isHidden = input.type === "password";
+        input.type = isHidden ? "text" : "password";
+        toggle.setAttribute("aria-label", isHidden ? "Hide password" : "Show password");
+        toggle.innerHTML = isHidden
+            ? '<i class="fa-regular fa-eye-slash"></i>'
+            : '<i class="fa-regular fa-eye"></i>';
+    });
+
+    if (form && submit && submitText) {
+        form.addEventListener("submit", () => {
+            submit.setAttribute("aria-busy", "true");
+            submitText.textContent = "Signing in...";
+            submit.disabled = true;
+        });
+    }
+})();
+</script>
+{% endblock %}
