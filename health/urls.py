@@ -26,5 +26,8 @@ urlpatterns = [
     path('ai-doctor/', views.ai_doctor, name='ai_doctor'),
     path('ai-doctor/insights/', views.ai_doctor_insights_api, name='ai_doctor_insights_api'),
     path('settings/', views.settings_view, name='settings'),
+    path('dashboard/chart/', views.dashboard_chart, name='dashboard_chart'),
+    path('dashboard/records/', views.dashboard_records, name='dashboard_records'),
+    path('reports/health/pdf/', views.health_report_pdf, name='health_report_pdf'),
 ]
 

@@ -1,0 +1,64 @@
+{% load humanize %}
+<div class="card recent-records-card" id="recent-records-card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Recent Records</h2>
+        <a href="{% url 'health:log_data' %}" class="btn btn-sm btn-outline-light">View All</a>
+    </div>
+    <div class="records-overlay" hidden>Updating records...</div>
+    {% if recent_records %}
+    <div class="table-filters d-flex justify-content-between align-items-center mb-3">
+        <div class="filter-group">
+            <span class="filter-label">Quick range</span>
+            <div class="filter-buttons">
+                <a class="filter-btn {% if table_range == 7 %}active{% endif %}" data-table-range="7" href="{{ table_link_7 }}">Last 7 days</a>
+                <a class="filter-btn {% if table_range == 30 %}active{% endif %}" data-table-range="30" href="{{ table_link_30 }}">Last 30 days</a>
+                <a class="filter-btn {% if table_range == 'all' %}active{% endif %}" data-table-range="all" href="{{ table_link_all }}">All</a>
+            </div>
+        </div>
+        <div class="filter-search">
+            <div class="search-input">
+                <span class="search-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
+                <input id="recordSearch" class="form-control form-control-sm" type="search" placeholder="Search by date, bpm, hours, steps">
+            </div>
+        </div>
+    </div>
+    <div class="table-responsive">
+    <table class="table table-borderless table-hover table-dark-custom">
+        <thead>
+            <tr>
+                <th>Date <span class="sort-indicator" aria-hidden="true"></span></th>
+                <th>Heart Rate <span class="sort-indicator" aria-hidden="true"></span></th>
+                <th>Sleep Hours <span class="sort-indicator" aria-hidden="true"></span></th>
+                <th>Steps <span class="sort-indicator" aria-hidden="true"></span></th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in recent_records %}
+            <tr class="record-row" data-date="{{ record.date|date:'Y-m-d' }}" data-steps="{{ record.steps }}" data-sleep="{{ record.sleep_hours }}" data-search="{{ record.date }} {{ record.heart_rate }} {{ record.sleep_hours }} {{ record.steps }}">
+                <td>{{ record.date }}</td>
+                <td>{{ record.heart_rate|floatformat:0 }} bpm</td>
+                <td>{{ record.sleep_hours|floatformat:1 }} hrs</td>
+                <td>{{ record.steps|intcomma }}</td>
+                <td>
+                    <div class="action-buttons">
+                        <a href="{% url 'health:edit_record' record.id %}" class="action-btn action-btn-edit"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
+                        <button type="button" class="action-btn action-btn-danger" data-delete-url="{% url 'health:delete_record' record.id %}" data-record-date="{{ record.date }}"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty-state subtle">
+        <div class="empty-icon"><i class="fa-solid fa-clipboard-list"></i></div>
+        <div class="empty-title">No recent records</div>
+        <div class="empty-subtitle">Add your first record to build a history and unlock insights.</div>
+        <a href="{% url 'health:log_data' %}" class="btn btn-sm btn-primary mt-2">Add Record</a>
+    </div>
+    {% endif %}
+
+    <div class="records-error" hidden>Could not update records.</div>
+</div>
