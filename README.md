@@ -1,4 +1,4 @@
-﻿# Health Monitoring Platform
+﻿  # Health Monitoring Platform
 
 A professional, scalable health tracking application built with Django, SQLAlchemy utilities, and AI-powered insights.
 
@@ -22,16 +22,30 @@ HealthTech/
 
 ## Quick Start
 
-### 1. Create and Activate Virtual Environment (Recommended)
+### ⚠️ Important Prerequisites
 
-**On Windows:**
+The application uses a SQLite database stored in a `data/` directory. This directory **must be created** before running migrations.
+
+### 1. Activate Virtual Environment (Recommended)
+
+**On Windows (PowerShell):**
 
 ```powershell
-# Create virtual environment
-python -m venv venv
+# Navigate to the project directory
+cd path\to\enset-health
 
-# Activate virtual environment (PowerShell)
+# Activate virtual environment
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
 .\venv\Scripts\Activate.ps1
+
+# You should see (venv) at the start of your prompt
+```
+
+**On Windows (Command Prompt):**
+
+```cmd
+cd path\to\enset-health
+.\venv\Scripts\activate.bat
 ```
 
 ### 2. Install Dependencies
@@ -40,40 +54,118 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-### 3. Initialize Database with Sample Data
+### 3. Create the Data Directory
+
+**⚠️ This step is CRITICAL and often missed!** The application expects a `data/` directory for the SQLite database.
 
 ```powershell
-# Run migrations
+# Create the data directory (from project root)
+mkdir data
+```
+
+If the directory already exists, you can skip this step.
+
+### 4. Initialize Database with Migrations and Sample Data
+
+```powershell
+# Run Django migrations (creates database schema)
 python manage.py migrate
 
-# Seed the Django database with sample records
+# Seed the database with 30 days of synthetic health data
 python seed_django.py
 ```
 
-This creates 30 days of synthetic health data in the Django database (`db.sqlite3`).
+This will create `data/health.db` with all necessary tables and sample records.
 
-### 4. Run the Django Development Server
+**Expected Output:**
+```
+============================================================
+Health Monitoring Platform - Django Seed Script
+============================================================
+
+[INFO] Generating 30 days of health data...
+  Date range: 2025-12-08 to 2026-01-06
+
+[OK] Data generation completed!
+  Created: 30 records
+```
+
+### 5. Run the Django Development Server
 
 ```powershell
-# Start the Django development server
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/ in your browser. Use the Django admin (if enabled) at `/admin/`.
+Open http://127.0.0.1:8000/ in your browser.
 
 ## AI Configuration (Optional)
 
-Create a `.env` file in the project root with your API key:
+AI features are optional — the app works without configuration, but AI endpoints will be disabled.
+
+To enable AI features:
+
+1. Get your API key from [DeepSeek](https://www.deepseek.com/)
+2. Copy `.env.example` to `.env`:
+
+```powershell
+copy .env.example .env
+```
+
+3. Edit `.env` and add your API key:
 
 ```env
 DEEPSEEK_API_KEY=your_actual_api_key_here
 ```
 
-AI features are optional — the app works without the key, but AI endpoints will be disabled.
+The application will automatically load environment variables from the `.env` file.
 
 ## Database Location
 
-The Django SQLite database file is `db.sqlite3` in the project root. It is created when you run migrations or seed the DB.
+The Django SQLite database file is `data/health.db`. It is created when you run migrations. The `data/` directory must exist before running migrations.
+
+## Troubleshooting
+
+### Error: "unable to open database file"
+
+This error typically occurs when the `data/` directory doesn't exist.
+
+**Solution:**
+```powershell
+mkdir data
+python manage.py migrate
+```
+
+### Virtual Environment Not Activating
+
+If your shell doesn't recognize the activate command, try using the full path:
+
+**Windows PowerShell:**
+```powershell
+& ".\venv\Scripts\Activate.ps1"
+```
+
+**Windows Command Prompt:**
+```cmd
+.\venv\Scripts\activate.bat
+```
+
+### Port 8000 Already in Use
+
+If port 8000 is already in use, run the server on a different port:
+
+```powershell
+python manage.py runserver 8001
+```
+
+Then access the app at http://127.0.0.1:8001/
+
+### Missing Dependencies
+
+If you get import errors, reinstall dependencies:
+
+```powershell
+pip install -r requirements.txt --upgrade
+```
 
 ## Development Notes
 
