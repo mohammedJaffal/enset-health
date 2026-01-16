@@ -19,7 +19,7 @@ from io import BytesIO
 import base64
 import logging
 from .models import HealthRecord, Profile
-from .forms import HealthRecordForm, RegistrationForm, UserSettingsForm, ProfileForm
+from .forms import HealthRecordForm, RegistrationForm, UserSettingsForm, ProfileForm, ReportScheduleForm
 from services.ai_service import get_ai_insights, get_ai_client
 from services.utils import check_latest_alerts
 import pandas as pd
@@ -882,6 +882,12 @@ def ai_doctor(request):
 @login_required
 def settings_view(request):
     profile, _ = Profile.objects.get_or_create(user=request.user)
+    if not profile.report_recipient_email:
+        fallback_email = request.user.email or getattr(settings, 'REPORT_RECIPIENT_FALLBACK', '')
+        if fallback_email:
+            profile.report_recipient_email = fallback_email
+            profile.save(update_fields=['report_recipient_email', 'updated_at'])
+    schedule_form = ReportScheduleForm(instance=profile)
     if request.method == 'POST':
         if 'save_profile' in request.POST:
             user_form = UserSettingsForm(request.POST, instance=request.user)
@@ -901,6 +907,21 @@ def settings_view(request):
                 update_session_auth_hash(request, user)
                 messages.success(request, 'Password updated successfully.')
                 return redirect('health:settings')
+        elif 'save_schedule' in request.POST:
+            user_form = UserSettingsForm(instance=request.user)
+            profile_form = ProfileForm(instance=profile)
+            password_form = PasswordChangeForm(request.user)
+            schedule_form = ReportScheduleForm(request.POST, instance=profile)
+            if schedule_form.is_valid():
+                schedule = schedule_form.save(commit=False)
+                schedule.compute_next_report_at()
+                schedule.save()
+                messages.success(request, 'Report schedule updated.')
+                return redirect('health:settings')
+        else:
+            user_form = UserSettingsForm(instance=request.user)
+            profile_form = ProfileForm(instance=profile)
+            password_form = PasswordChangeForm(request.user)
     else:
         user_form = UserSettingsForm(instance=request.user)
         profile_form = ProfileForm(instance=profile)
@@ -913,6 +934,7 @@ def settings_view(request):
         'user_form': user_form,
         'profile_form': profile_form,
         'password_form': password_form,
+        'schedule_form': schedule_form,
     }
     return render(request, 'health/settings.html', context)
 

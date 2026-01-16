@@ -54,6 +54,71 @@
 </div>
 
 <div class="card">
+    <h3>Report Scheduling</h3>
+    <p class="text-muted mb-3">Automatically email your PDF report on a cadence you choose.</p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-check form-switch mb-3">
+            {{ schedule_form.report_schedule_enabled }}
+            <label class="form-check-label ms-2">Send reports automatically</label>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label text-muted">Send to</label>
+                {{ schedule_form.report_recipient_email }}
+                {% if schedule_form.report_recipient_email.errors %}
+                <div class="form-error">{{ schedule_form.report_recipient_email.errors|striptags }}</div>
+                {% endif %}
+            </div>
+            <div class="col-md-6">
+                <label class="form-label text-muted">Report window</label>
+                {{ schedule_form.report_range_days }}
+                {% if schedule_form.report_range_days.errors %}
+                <div class="form-error">{{ schedule_form.report_range_days.errors|striptags }}</div>
+                {% endif %}
+            </div>
+            <div class="col-md-4">
+                <label class="form-label text-muted">Frequency</label>
+                {{ schedule_form.report_frequency }}
+                {% if schedule_form.report_frequency.errors %}
+                <div class="form-error">{{ schedule_form.report_frequency.errors|striptags }}</div>
+                {% endif %}
+            </div>
+            <div class="col-md-4" data-schedule-field="weekly">
+                <label class="form-label text-muted">Weekly on</label>
+                {{ schedule_form.report_day_of_week }}
+                {% if schedule_form.report_day_of_week.errors %}
+                <div class="form-error">{{ schedule_form.report_day_of_week.errors|striptags }}</div>
+                {% endif %}
+            </div>
+            <div class="col-md-4" data-schedule-field="monthly">
+                <label class="form-label text-muted">Monthly on day</label>
+                {{ schedule_form.report_day_of_month }}
+                {% if schedule_form.report_day_of_month.errors %}
+                <div class="form-error">{{ schedule_form.report_day_of_month.errors|striptags }}</div>
+                {% endif %}
+            </div>
+            <div class="col-md-4">
+                <label class="form-label text-muted">Send time</label>
+                {{ schedule_form.report_time }}
+                <small class="text-muted">Uses server time zone (UTC).</small>
+                {% if schedule_form.report_time.errors %}
+                <div class="form-error">{{ schedule_form.report_time.errors|striptags }}</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="mt-3 d-flex justify-content-end">
+            <button type="submit" name="save_schedule" class="btn btn-primary">
+                <i class="fa-regular fa-clock me-1"></i> Save Schedule
+            </button>
+        </div>
+    </form>
+    <div class="small text-muted mt-2">
+        The report will be generated with your latest data and sent as the same PDF used by the "Download Report" button.
+    </div>
+</div>
+
+<div class="card">
     <h3>Security</h3>
     <form method="post">
         {% csrf_token %}
@@ -88,4 +153,34 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+    const frequency = document.querySelector('#id_report_frequency');
+    const weeklyField = document.querySelector('[data-schedule-field="weekly"]');
+    const monthlyField = document.querySelector('[data-schedule-field="monthly"]');
+    const toggle = document.querySelector('#id_report_schedule_enabled');
+
+    const syncVisibility = () => {
+        const mode = frequency ? frequency.value : 'daily';
+        if (weeklyField) weeklyField.style.display = mode === 'weekly' ? '' : 'none';
+        if (monthlyField) monthlyField.style.display = mode === 'monthly' ? '' : 'none';
+
+        const enabled = toggle ? toggle.checked : true;
+        document.querySelectorAll('[data-schedule-field]').forEach((node) => {
+            node.classList.toggle('opacity-50', !enabled);
+        });
+    };
+
+    if (frequency) {
+        frequency.addEventListener('change', syncVisibility);
+    }
+    if (toggle) {
+        toggle.addEventListener('change', syncVisibility);
+    }
+    syncVisibility();
+})();
+</script>
 {% endblock %}

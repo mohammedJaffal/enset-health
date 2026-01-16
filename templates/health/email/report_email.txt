@@ -1,0 +1,10 @@
+Hi {{ user.get_full_name|default:user.username }},
+
+Your scheduled health report for {{ date_range }} is attached as a PDF.
+
+- Generated at: {{ generated_on }} (server time)
+- Data window: last {{ range_days }} days
+
+If you did not request this email, you can disable scheduling from your profile settings.
+
+Health Monitor

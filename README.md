@@ -98,6 +98,12 @@ python manage.py runserver
 
 Open http://127.0.0.1:8000/ in your browser.
 
+### Scheduled Email Reports
+
+- Configure cadence under **Settings → Report Scheduling** (daily/weekly/monthly, time of day, and recipient).
+- Set email credentials in `.env` (SMTP host, user, password, `DEFAULT_FROM_EMAIL`, optional `REPORT_RECIPIENT_FALLBACK`).
+- Use Task Scheduler/cron to run `python manage.py send_scheduled_reports` at least hourly to deliver due PDFs.
+
 ## AI Configuration (Optional)
 
 AI features are optional — the app works without configuration, but AI endpoints will be disabled.
